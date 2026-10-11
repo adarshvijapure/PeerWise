@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ group.name }}</h1>
+    {% if group.subject %}<p class="page-subtitle">{{ group.subject }}</p>{% endif %}
+  </div>
+  <div class="header-actions">
+    <a href="{{ url_for('queries.create', group_id=group.id) }}" class="btn btn--primary">
+      + Post a Doubt
+    </a>
+  </div>
+</div>
+
+<!-- Invite banner -->
+<div class="invite-banner">
+  <span>🔗 Invite link:</span>
+  <code id="invite-url" class="invite-url">{{ invite_url }}</code>
+  <button class="btn btn--ghost btn--sm" onclick="copyInvite()">Copy</button>
+</div>
+
+<!-- Member invite by email -->
+<details class="collapsible">
+  <summary>✉️ Invite friends by email</summary>
+  <form method="POST" action="{{ url_for('groups.invite_by_email', group_id=group.id) }}" class="invite-form">
+    <input type="text" name="emails" class="input" placeholder="comma@separated.com, emails@here.com" />
+    <button type="submit" class="btn btn--secondary btn--sm">Send Invites</button>
+  </form>
+</details>
+
+<!-- Query list -->
+<div class="section-header">
+  <h2 class="section-title">Queries</h2>
+  <div class="filter-tabs">
+    <button class="filter-tab active" data-filter="all">All</button>
+    <button class="filter-tab" data-filter="open">Open</button>
+    <button class="filter-tab" data-filter="resolved">Resolved</button>
+  </div>
+</div>
+
+{% if queries %}
+<div class="query-list" id="query-list">
+  {% for query in queries %}
+  <a href="{{ url_for('queries.detail', query_id=query.id) }}"
+     class="query-card query-card--{{ query.status }}"
+     data-status="{{ query.status }}">
+    <div class="query-card__meta">
+      {% if query.is_urgent %}
+        <span class="badge badge--urgent">🚨 SOS</span>
+      {% endif %}
+      {% if query.tagged_expert_email %}
+        <span class="badge badge--expert">🎓 @Expert</span>
+      {% endif %}
+      <span class="badge badge--{{ query.status }}">{{ query.status|capitalize }}</span>
+    </div>
+    <h3 class="query-card__title">{{ query.title }}</h3>
+    <p class="query-card__body">{{ query.body[:120] }}{% if query.body|length > 120 %}…{% endif %}</p>
+    <div class="query-card__footer">
+      <div class="query-card__author">
+        {% if query.author.avatar_url %}
+          <img src="{{ query.author.avatar_url }}" class="avatar-xs" alt="" />
+        {% endif %}
+        <span>{{ query.author.name }}</span>
+      </div>
+      <div class="query-card__stats">
+        {% if query.drive_link %}<span title="Has Drive attachment">📎</span>{% endif %}
+        {% if query.voice_note_path %}<span title="Has voice note">🎙️</span>{% endif %}
+        <span>{{ query.replies.count() }} reply{{ '' if query.replies.count() == 1 else 'ies' }}</span>
+        <span class="query-card__time">{{ query.created_at.strftime('%d %b') }}</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state empty-state--sm">
+  <div class="empty-state__icon">💬</div>
+  <p>No queries yet. Be the first to post a doubt!</p>
+</div>
+{% endif %}
+
+<!-- Members sidebar -->
+<div class="members-section">
+  <h3 class="members-title">Members ({{ members|length }})</h3>
+  <div class="members-list">
+    {% for member in members %}
+    <div class="member-chip">
+      {% if member.avatar_url %}
+        <img src="{{ member.avatar_url }}" class="avatar-xs" alt="" />
+      {% else %}
+        <div class="avatar-xs avatar-xs--placeholder">{{ member.name[0]|upper }}</div>
+      {% endif %}
+      <span>{{ member.name }}</span>
+      {% if member.id == group.owner_id %}<span class="owner-tag">Owner</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- SOS Quota Manager (owner-only panel) -->
+{% if current_user.id == group.owner_id %}
+<div class="sos-manager">
+  <div class="sos-manager__header">
+    <span class="sos-manager__icon">🚨</span>
+    <div>
+      <h3 class="sos-manager__title">SOS Quota Manager</h3>
+      <p class="sos-manager__subtitle">Grant extra SOS sends to members who've hit their weekly limit.</p>
+    </div>
+  </div>
+  <div class="sos-manager__table">
+    {% for member in members %}
+    {% set remaining = member.get_sos_remaining() %}
+    <div class="sos-row">
+      <div class="sos-row__user">
+        {% if member.avatar_url %}
+          <img src="{{ member.avatar_url }}" class="avatar-xs" alt="" />
+        {% else %}
+          <div class="avatar-xs avatar-xs--placeholder">{{ member.name[0]|upper }}</div>
+        {% endif %}
+        <span class="sos-row__name">{{ member.name }}</span>
+        <span class="sos-quota-badge {% if remaining == 0 %}sos-quota-badge--empty{% else %}sos-quota-badge--ok{% endif %}">
+          {{ remaining }} left
+        </span>
+      </div>
+      {% if member.id != current_user.id %}
+      <form method="POST"
+            action="{{ url_for('groups.grant_sos', group_id=group.id, user_id=member.id) }}"
+            class="sos-grant-form">
+        <select name="amount" class="sos-amount-select">
+          <option value="1">+1 SOS</option>
+          <option value="3" selected>+3 SOS</option>
+          <option value="5">+5 SOS</option>
+        </select>
+        <button type="submit" class="btn btn--grant btn--sm">Grant</button>
+      </form>
+      {% else %}
+        <span class="sos-row__you">You (owner)</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+function copyInvite() {
+  const url = document.getElementById('invite-url').textContent;
+  navigator.clipboard.writeText(url).then(() => {
+    alert('Invite link copied to clipboard!');
+  });
+}
+
+// Filter tabs
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    const filter = this.dataset.filter;
+    document.querySelectorAll('.query-card').forEach(card => {
+      card.style.display =
+        filter === 'all' || card.dataset.status === filter ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}

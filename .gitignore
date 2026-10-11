@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables (NEVER commit this)
+.env
+
+# SQLite database
+instance/
+*.db
+*.sqlite3
+
+# Google credentials
+credentials.json
+token.json
+client_secrets.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploaded audio files
+app/static/audio/*.webm
+app/static/audio/*.ogg
+app/static/audio/*.wav
+app/static/audio/*.mp4
+
+# Tunnel binary (downloaded locally, never commit)
+cloudflared.exe
+cloudflared

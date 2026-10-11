@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}{{ query.title }}{% endblock %}
+
+{% block content %}
+<div class="query-page">
+
+  <!-- Query header -->
+  <div class="query-header">
+    <a href="{{ url_for('groups.detail', group_id=group.id) }}" class="back-link">← {{ group.name }}</a>
+    <div class="query-badges">
+      {% if query.is_urgent %}<span class="badge badge--urgent">🚨 SOS</span>{% endif %}
+      {% if query.tagged_expert_email %}<span class="badge badge--expert">🎓 @Expert: {{ query.tagged_expert_email }}</span>{% endif %}
+      <span class="badge badge--{{ query.status }}" id="status-badge">{{ query.status|capitalize }}</span>
+    </div>
+  </div>
+
+  <!-- Query body -->
+  <div class="query-detail-card">
+    <h1 class="query-detail-title">{{ query.title }}</h1>
+
+    <div class="query-author-row">
+      {% if query.author.avatar_url %}
+        <img src="{{ query.author.avatar_url }}" class="avatar-sm" alt="" />
+      {% endif %}
+      <div>
+        <strong>{{ query.author.name }}</strong>
+        <span class="muted">· {{ query.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+      </div>
+      {% if query.author_id == current_user.id or group.owner_id == current_user.id %}
+      <form method="POST"
+            action="{{ url_for('queries.toggle_status', query_id=query.id) }}"
+            id="toggle-form"
+            style="margin-left:auto;">
+        <button type="submit" class="btn btn--ghost btn--sm" id="toggle-btn">
+          {% if query.is_open %}Mark Resolved ✓{% else %}Reopen Query{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="query-body-text">{{ query.body }}</div>
+
+    {% if query.drive_link %}
+    <div class="attachment-row">
+      <span>📎</span>
+      <a href="{{ query.drive_link }}" target="_blank" rel="noopener noreferrer" class="drive-link">
+        View Attached File on Drive
+      </a>
+    </div>
+    {% endif %}
+
+    {% if query.voice_note_path %}
+    <div class="voice-note-player">
+      <span>🎙️ Voice Note:</span>
+      <audio controls src="{{ url_for('static', filename=query.voice_note_path) }}"></audio>
+    </div>
+    {% endif %}
+
+    <div class="notification-mode-tag">
+      📬 Notification: <strong>{{ query.notification_mode | replace('_', ' ') | title if query.notification_mode else 'N/A' }}</strong>
+    </div>
+  </div>
+
+  <!-- ── Replies ──────────────────────────────────────────────────── -->
+  <div class="replies-section">
+    <h2 class="replies-title">{{ replies|length }} Answer{{ '' if replies|length == 1 else 's' }}</h2>
+
+    {% for reply in replies %}
+    <div class="reply-card {% if reply.is_accepted_answer %}reply-card--accepted{% endif %}"
+         id="reply-{{ reply.id }}">
+      {% if reply.is_accepted_answer %}
+        <div class="accepted-badge">✅ Accepted Answer</div>
+      {% endif %}
+
+      <div class="reply-author-row">
+        {% if reply.author.avatar_url %}
+          <img src="{{ reply.author.avatar_url }}" class="avatar-xs" alt="" />
+        {% endif %}
+        <strong>{{ reply.author.name }}</strong>
+        <span class="muted">· {{ reply.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+      </div>
+
+      <div class="reply-body">{{ reply.body }}</div>
+
+      {% if reply.drive_link %}
+      <a href="{{ reply.drive_link }}" target="_blank" class="drive-link">📎 Drive Attachment</a>
+      {% endif %}
+
+      {% if reply.voice_note_path %}
+      <div class="voice-note-player">
+        <span>🎙️</span>
+        <audio controls src="{{ url_for('static', filename=reply.voice_note_path) }}"></audio>
+      </div>
+      {% endif %}
+
+      <!-- Accept answer button (only query author can accept) -->
+      {% if query.author_id == current_user.id and not reply.is_accepted_answer %}
+      <form method="POST" action="{{ url_for('replies.accept_answer', reply_id=reply.id) }}">
+        <button type="submit" class="btn btn--ghost btn--sm">✓ Accept as Answer</button>
+      </form>
+      {% endif %}
+
+      <!-- Nested replies -->
+      {% if reply.children.count() > 0 %}
+      <div class="nested-replies">
+        {% for child in reply.children.all() %}
+        <div class="reply-card reply-card--nested">
+          <div class="reply-author-row">
+            {% if child.author.avatar_url %}
+              <img src="{{ child.author.avatar_url }}" class="avatar-xs" alt="" />
+            {% endif %}
+            <strong>{{ child.author.name }}</strong>
+            <span class="muted">· {{ child.created_at.strftime('%d %b, %H:%M') }}</span>
+          </div>
+          <div class="reply-body">{{ child.body }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Reply to this reply -->
+      <details class="reply-thread-expand">
+        <summary>↩ Reply</summary>
+        <form method="POST" action="{{ url_for('replies.create', query_id=query.id) }}"
+              class="mini-reply-form">
+          <input type="hidden" name="parent_reply_id" value="{{ reply.id }}" />
+          <textarea name="body" class="input input--textarea input--sm" rows="2"
+                    placeholder="Write a reply…" required></textarea>
+          <button type="submit" class="btn btn--secondary btn--sm">Post Reply</button>
+        </form>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ── Post a reply ─────────────────────────────────────────────── -->
+  {% if query.is_open %}
+  <div class="reply-form-card">
+    <h3 class="reply-form-title">Your Answer</h3>
+    <form method="POST" action="{{ url_for('replies.create', query_id=query.id) }}"
+          enctype="multipart/form-data" id="reply-form">
+
+      <div class="form-group">
+        <textarea name="body" class="input input--textarea" rows="4" required
+                  placeholder="Type your answer clearly and concisely…"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group--half">
+          <label class="form-label">📎 Drive Link</label>
+          <input type="url" name="drive_link" class="input"
+                 placeholder="https://drive.google.com/…" />
+        </div>
+        <div class="form-group form-group--half">
+          <label class="form-label">📤 Or Upload File</label>
+          <input type="file" name="drive_upload" class="input input--file" />
+        </div>
+      </div>
+
+      <!-- Voice reply recorder -->
+      <div class="form-group">
+        <label class="form-label">🎙️ Voice Reply</label>
+        <div class="recorder-box" id="recorder-box-reply">
+          <button type="button" id="record-btn-reply" class="btn btn--record">
+            <span class="record-dot"></span> Record Voice Reply
+          </button>
+          <div id="recording-status-reply" class="recording-status hidden">
+            <span class="pulse-dot"></span> Recording… <span id="record-timer-reply">0:00</span>
+            <button type="button" id="stop-btn-reply" class="btn btn--secondary btn--sm">Stop</button>
+          </div>
+          <div id="playback-area-reply" class="playback-area hidden">
+            <audio id="voice-preview-reply" controls></audio>
+            <button type="button" id="discard-btn-reply" class="btn btn--ghost btn--sm">✕ Discard</button>
+          </div>
+          <input type="file" id="voice_note_reply" name="voice_note" class="hidden" accept="audio/*" />
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn--primary">Post Answer →</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="resolved-banner">
+    ✅ This query has been resolved. It is now read-only.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// AJAX status toggle
+document.getElementById('toggle-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const res = await fetch(this.action, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  const data = await res.json();
+  document.getElementById('status-badge').textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+  document.getElementById('status-badge').className = `badge badge--${data.status}`;
+  document.getElementById('toggle-btn').textContent = data.status === 'open' ? 'Mark Resolved ✓' : 'Reopen Query';
+});
+
+// Initialize voice recorder for reply form
+initVoiceRecorder({
+  recordBtnId: 'record-btn-reply',
+  stopBtnId: 'stop-btn-reply',
+  discardBtnId: 'discard-btn-reply',
+  statusId: 'recording-status-reply',
+  timerId: 'record-timer-reply',
+  playbackAreaId: 'playback-area-reply',
+  previewId: 'voice-preview-reply',
+  fileInputId: 'voice_note_reply',
+});
+</script>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Post a Doubt – {{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="form-page">
+  <div class="form-card">
+    <div class="form-card__header">
+      <h1 class="form-title">📝 Post a Doubt</h1>
+      <p class="form-subtitle">in <strong>{{ group.name }}</strong></p>
+    </div>
+
+    <form method="POST"
+          action="{{ url_for('queries.create', group_id=group.id) }}"
+          enctype="multipart/form-data"
+          id="query-form">
+
+      <!-- Title -->
+      <div class="form-group">
+        <label class="form-label" for="title">Question Title <span class="required">*</span></label>
+        <input type="text" id="title" name="title" class="input" required
+               placeholder="e.g., How does dynamic programming differ from recursion?" />
+      </div>
+
+      <!-- Body -->
+      <div class="form-group">
+        <label class="form-label" for="body">Describe your doubt <span class="required">*</span></label>
+        <textarea id="body" name="body" class="input input--textarea" rows="5" required
+                  placeholder="Be specific. What have you tried? Where exactly are you stuck?"></textarea>
+      </div>
+
+      <!-- Google Drive link -->
+      <div class="form-group">
+        <label class="form-label" for="drive_link">
+          📎 Google Drive Link
+          <span class="form-hint">(paste a sharing link to your PDF, PPT, etc.)</span>
+        </label>
+        <input type="url" id="drive_link" name="drive_link" class="input"
+               placeholder="https://drive.google.com/file/d/..." />
+      </div>
+
+      <!-- OR upload a file directly -->
+      <div class="form-group">
+        <label class="form-label" for="drive_upload">
+          📤 Or upload a file
+          <span class="form-hint">(uploaded to your Drive automatically)</span>
+        </label>
+        <input type="file" id="drive_upload" name="drive_upload" class="input input--file"
+               accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg" />
+      </div>
+
+      <!-- Voice note recorder -->
+      <div class="form-group">
+        <label class="form-label">🎙️ Voice Note</label>
+        <div class="recorder-box" id="recorder-box">
+          <button type="button" id="record-btn" class="btn btn--record">
+            <span class="record-dot"></span> Start Recording
+          </button>
+          <div id="recording-status" class="recording-status hidden">
+            <span class="pulse-dot"></span> Recording… <span id="record-timer">0:00</span>
+            <button type="button" id="stop-btn" class="btn btn--secondary btn--sm">Stop</button>
+          </div>
+          <div id="playback-area" class="playback-area hidden">
+            <audio id="voice-preview" controls></audio>
+            <button type="button" id="discard-btn" class="btn btn--ghost btn--sm">✕ Discard</button>
+          </div>
+          <!-- Hidden file input populated by JS -->
+          <input type="file" id="voice_note" name="voice_note" class="hidden" accept="audio/*" />
+        </div>
+      </div>
+
+      <!-- Notification settings -->
+      <div class="form-card__section">
+        <h3 class="section-mini-title">📬 Notification Settings</h3>
+
+        <!-- @Expert tag -->
+        <div class="form-group">
+          <label class="form-label" for="tagged_expert_email">
+            🎓 Tag an @Expert
+            <span class="form-hint">(sends them a direct email immediately)</span>
+          </label>
+          <select id="tagged_expert_email" name="tagged_expert_email" class="input input--select">
+            <option value="">— No specific expert —</option>
+            {% for member in members %}
+              <option value="{{ member.email }}">{{ member.name }} ({{ member.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- SOS / Urgent toggle -->
+        <div class="form-group">
+          <div class="toggle-row">
+            <label class="toggle-label" for="is_urgent">
+              <div>
+                <strong>🚨 SOS / Urgent Mode</strong>
+                <p class="form-hint">Instantly emails ALL group members. Limited to 3/week.</p>
+              </div>
+            </label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="is_urgent" name="is_urgent" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="sos-counter" id="sos-counter">
+            Loading SOS uses…
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn--primary btn--full btn--lg">
+        Post Query →
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Fetch and display SOS remaining count
+fetch('/queries/sos-remaining')
+  .then(r => r.json())
+  .then(data => {
+    const el = document.getElementById('sos-counter');
+    const rem = data.remaining;
+    el.innerHTML = `<span class="${rem === 0 ? 'sos-empty' : 'sos-ok'}">
+      ${rem}/3 SOS uses remaining this week
+    </span>`;
+    if (rem === 0) {
+      document.getElementById('is_urgent').disabled = true;
+    }
+  });
+
+// Disable @Expert select if SOS is checked and vice versa
+const urgentCb = document.getElementById('is_urgent');
+const expertSel = document.getElementById('tagged_expert_email');
+urgentCb.addEventListener('change', () => {
+  if (urgentCb.checked) expertSel.value = '';
+});
+expertSel.addEventListener('change', () => {
+  if (expertSel.value) urgentCb.checked = false;
+});
+</script>
+{% endblock %}
